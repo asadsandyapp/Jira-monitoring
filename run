@@ -1,0 +1,7 @@
+#!/bin/sh
+# Read the sprint from Jira and open the dashboard. One command, no activate step.
+cd "$(dirname "$0")" || exit 1
+if [ -x .venv/bin/python ]; then
+  exec .venv/bin/python -m monitor
+fi
+exec python3 -m monitor

@@ -1,0 +1,98 @@
+# Copy to config.yaml and fill in. config.yaml is gitignored.
+site: https://blockapt.atlassian.net
+project: BSB
+sprint: v8.8.0          # sprint name, or "open" to use every open sprint
+timezone: Asia/Karachi   # previous working day for the "did not log" table
+
+# Sub-tasks are excluded by default. They inherit a parent's work but carry
+# their own status, so counting them makes a sprint look far further along
+# than it is. Set to true only if your team tracks delivery at sub-task level.
+include_subtasks: false
+
+# Auth comes from the environment, never this file:
+#   JIRA_EMAIL=you@company.com
+#   JIRA_API_TOKEN=...     (create at id.atlassian.com, read-only user is enough)
+
+# Field display names. Resolved to customfield_* ids at runtime, so you only
+# need the label you see in Jira. Run discover.py to list the real names.
+fields:
+  sprint: Sprint
+  start_date: Start date
+  target_date: Target end
+
+# Your workflow, in order. Names must match Jira exactly.
+workflow:
+  todo: "1) To Do"
+  development: "2) Development"
+  development_paused: "2.1) Development - Paused"
+  qa: "3) QA"
+  qa_fail: "3.1) QA Fail"
+  documentation: "4) Documentation"
+  uat_pending: "5) UAT - Pending"
+  uat_in_progress: "5.1) UAT - In Progress"
+  uat_paused: "5.2) UAT - Paused"
+  uat_flagged: "5.3) UAT - Flagged"
+  uat_fail: "5.4) UAT - Fail"
+  uat_pass: "5.5) UAT - Pass"
+  final_checks: "6) Final Checks"
+  done: "7) Done"
+
+# Who's who. Names are resolved to accountIds at runtime; run discover.py to
+# check each one matches exactly one Jira user. Roles drive the per-person
+# panel and let you scope a rule to certain people.
+people:
+  Afifa Cheema: pm
+  Malik Ahmad: devops
+  Abdullah Rafique: automation
+  Asad Tanveer: developer
+  Nabeel Qadri: developer
+  Rana Asad: developer
+  Talal Ghauri: developer
+  Waqar Tanveer: developer
+
+rules:
+  # Cards that left To Do but never got their dates filled in.
+  missing_dates:
+    require: [start_date, target_date]
+
+  # Reviewer commented on a UAT card and the developer never answered.
+  unanswered_review:
+    reviewers: [Celeste, Dulan]   # display names or accountIds
+    after_hours: 24
+    # Who counts as answering. "developer" means the person who actually built
+    # the card, worked out from its history — not whoever holds it now, which
+    # in UAT is the reviewer. "anyone" accepts any non-reviewer reply.
+    answered_by: developer
+
+  # In Development with an empty description.
+  missing_description:
+    after_hours: 24
+
+  # The mirror of unanswered_review: the team asked, the reviewer went quiet.
+  awaiting_reviewer:
+    after_hours: 72
+
+  # How long cards have been parked in UAT - Pending or UAT - In Progress.
+  stuck_in_uat:
+    after_days: 2               # 0 lists every UAT card with its age
+
+  # Development - Paused: the developer must say why. "paused" alone does not count.
+  development_paused: {}
+
+  # QA Fail: Afifa or Mamoon explains why, then the developer replies.
+  qa_fail:
+    qa: [Afifa Cheema, Mamoon]
+
+  # UAT - Paused / UAT - Flagged: some comment has to give a real reason.
+  uat_paused: {}
+  uat_flagged: {}
+
+  # UAT - Fail: the developer or Afifa comments, and the card is back with
+  # the developer who built it.
+  uat_fail_return:
+    commenters: [Afifa Cheema]
+
+  # Count elapsed time in working days only (skip Sat/Sun).
+  working_days_only: true
+
+database: snapshots.db

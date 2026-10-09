@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Choose a sprint</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=8">
+</head>
+<body>
+<main class="choose">
+  <p class="eyebrow">{{ project }} · sprint monitor</p>
+  <h1>Which sprint?</h1>
+  <p class="meta">Type the name from Jira, or pick one. Nothing loads until you do.</p>
+  <form class="sprint-pick" method="post" action="{{ url_for('load_sprint') }}">
+    <label for="sprint-name">Sprint</label>
+    <input id="sprint-name" name="typed" list="sprint-names" maxlength="80" required
+           placeholder="Sprint name" autocomplete="off" autofocus>
+    <datalist id="sprint-names">
+      {% for name in sprint_choices %}
+      <option value="{{ name }}"></option>
+      {% endfor %}
+    </datalist>
+    <button type="submit">Load from Jira</button>
+    {% for name in sprint_choices[:12] %}
+    <button type="submit" name="picked" value="{{ name }}" class="chip">{{ name }}</button>
+    {% endfor %}
+  </form>
+  {% if load_error %}<p class="warn">{{ load_error }}</p>{% endif %}
+</main>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loading {{ sprint }} — sprint monitor</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=8">
+</head>
+<body>
+<main class="load">
+  <p class="eyebrow">{{ project }} · sprint monitor</p>
+  <div class="dial" id="dial" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Loading {{ sprint }}">
+    <svg viewBox="0 0 120 120" aria-hidden="true">
+      <circle class="track" cx="60" cy="60" r="52"></circle>
+      <circle class="value" cx="60" cy="60" r="52"></circle>
+    </svg>
+    <p class="pct"><span id="pct">0</span><small>%</small></p>
+  </div>
+  <h1>{{ sprint }}</h1>
+  <p class="step" id="step">Starting</p>
+  <div class="meter" aria-hidden="true"><span id="meter"></span></div>
+  <p class="meta" id="hint">Reading this sprint from Jira. It usually takes under a minute.</p>
+  <p class="warn" id="err" hidden></p>
+  <p id="back" hidden><a href="{{ url_for('dashboard') }}">Choose a sprint</a></p>
+</main>
+<script>
+(function () {
+  var ring = 326.73;
+  var value = document.querySelector(".dial .value");
+  var pct = document.getElementById("pct");
+  var step = document.getElementById("step");
+  var meter = document.getElementById("meter");
+  var dial = document.getElementById("dial");
+  var err = document.getElementById("err");
+  var back = document.getElementById("back");
+  var hint = document.getElementById("hint");
+
+  function paint(percent, label) {
+    var shown = Math.max(0, Math.min(100, percent || 0));
+    pct.textContent = String(shown);
+    step.textContent = label || "Reading Jira";
+    value.style.strokeDashoffset = String(ring * (1 - shown / 100));
+    meter.style.width = shown + "%";
+    dial.setAttribute("aria-valuenow", String(shown));
+  }
+
+  function poll() {
+    fetch("/sprint/progress", {cache: "no-store"})
+      .then(function (response) { return response.json(); })
+      .then(function (data) {
+        paint(data.percent, data.label);
+        if (data.done && data.error) {
+          err.hidden = false;
+          err.textContent = data.error;
+          back.hidden = false;
+          hint.hidden = true;
+          return;
+        }
+        if (data.done && data.url) {
+          paint(100, "Opening the board");
+          setTimeout(function () { location.href = data.url; }, 360);
+          return;
+        }
+        setTimeout(poll, 400);
+      })
+      .catch(function () { setTimeout(poll, 700); });
+  }
+  poll();
+})();
+</script>
+</body>
+</html>

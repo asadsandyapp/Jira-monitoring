@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ sprint }} — sprint monitor</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=8">
+</head>
+<body>
+<main class="shell">
+
+  <header class="masthead">
+    <p class="eyebrow">{{ project }} · sprint monitor</p>
+    <h1>{{ sprint }}</h1>
+    <form class="sprint-pick" method="post" action="{{ url_for('load_sprint') }}">
+      <label for="sprint-name">Sprint</label>
+      <input id="sprint-name" name="typed" list="sprint-names" maxlength="80"
+             placeholder="Type a sprint, for example v8.9.0" autocomplete="off">
+      <datalist id="sprint-names">
+        {% for name in sprint_choices %}
+        <option value="{{ name }}"></option>
+        {% endfor %}
+      </datalist>
+      <button type="submit">Load from Jira</button>
+      {% for name in sprint_choices[:8] %}
+      <button type="submit" name="picked" value="{{ name }}" class="chip {{ 'on' if name == sprint }}">{{ name }}</button>
+      {% endfor %}
+    </form>
+    {% if load_error %}<p class="warn">{{ load_error }}</p>{% endif %}
+    {% if developers %}
+    <nav class="sprint-pick" aria-label="Developer">
+      <span class="pick-label">Developer</span>
+      <a class="chip {{ 'on' if not selected_who }}" href="{{ keep(who='', stage='') }}">Everyone</a>
+      {% for person in developers %}
+      <a class="chip {{ 'on' if person.name == selected_who }}" href="{{ keep(who=person.name, stage='') }}">{{ person.name }}</a>
+      {% endfor %}
+    </nav>
+    {% endif %}
+    <p class="meta">{% if selected_who %}{{ issue_count }} of {{ sprint_total }} parent cards for {{ selected_who }}.{% else %}{{ issue_count }} parent cards.{% endif %}
+      Last read {{ taken }} ({{ timezone }}).
+      {% if board %}Daily log checked for {{ board.yesterday_label }}.{% endif %}
+      A log is time entered in Jira. A comment does not count.</p>
+  </header>
+
+  <section class="kpis" aria-label="Sprint snapshot">
+    {% for kpi in kpis %}
+    <a class="kpi {{ 'hot' if kpi.hot }}" href="{{ kpi.href or '#chase' }}">
+      <p class="kpi-label">{{ kpi.label }}</p>
+      <p class="kpi-value">{{ kpi.value }}</p>
+      <p class="kpi-note">{{ kpi.note }}</p>
+      {% if kpi.change %}<p class="meta">{{ kpi.change }}</p>{% endif %}
+    </a>
+    {% endfor %}
+  </section>
+
+  <section class="check {{ 'alert' if board and board.missing }}" id="missing-log">
+    <h2>Did not log yesterday
+      {% if board and board.open_cards %}<span class="tally {{ '' if board.missing else 'clear' }}">{{ board.missing|length }}</span>{% endif %}
+    </h2>
+    {% if board and board.open_cards == 0 %}
+      {% if selected_who %}
+      <p class="detail">{{ selected_who }} has no open cards in this sprint, so nothing is owed for {{ board.yesterday_label }}.</p>
+      {% else %}
+      <p class="detail">Every card in this sprint is done, so nobody owes a log for {{ board.yesterday_label }}.</p>
+      {% endif %}
+    {% elif not board %}
+      <p class="detail">This snapshot has no card detail. Load the sprint again and this table fills in.</p>
+    {% elif not board.missing %}
+      <p class="detail">Every developer with an open card logged time on {{ board.yesterday_label }}{% if board.logged %}: {{ board.logged|join(', ') }}{% endif %}.</p>
+    {% else %}
+      <p class="meta">{{ board.yesterday_label }}, Pakistan working day. A developer is listed when they had an open card and logged no time that day. Time is a Jira worklog, the same entries as the worklog report, on any issue. A comment does not count. A card picked up today is not held to yesterday.</p>
+      {% if board.logged %}<p class="detail">Logged: {{ board.logged|join(', ') }}.</p>{% endif %}
+      <div class="scroll">
+      <table class="board logs">
+        <colgroup>
+          <col class="c-who">
+          <col class="c-cards">
+          <col class="c-note">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Developer</th>
+            <th>Cards with no log</th>
+            <th>Last time logged</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for person in board.missing %}
+          <tr>
+            <td data-label="Developer">
+              <span class="person"><a href="{{ keep(who=person.developer, stage='') }}#progress">{{ person.developer }}</a><span class="role role-{{ person.role }}">{{ person.role }}</span></span>
+            </td>
+            <td data-label="Cards with no log">
+              {% for card in person.silent %}
+              <p class="line">
+                <a class="keylink" target="_blank" rel="noopener" href="{{ site }}/browse/{{ card.key }}">{{ card.key }}</a>
+                <a class="quiet" target="_blank" rel="noopener" href="{{ site }}/browse/{{ card.key }}">{{ card.summary }}</a>
+              </p>
+              <p class="status-line">{{ card.status }}</p>
+              {% endfor %}
+            </td>
+            <td data-label="Last time logged">
+              <p class="problem">{{ person.when }}</p>
+              <p class="note">{{ person.note }}</p>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    {% endif %}
+  </section>
+
+  {% if ladder %}
+  <section class="ladder" id="stages" aria-label="Cards by workflow stage">
+    <h2>Where the cards sit</h2>
+    <p class="meta">Click a stage to open that slice of the progress table.</p>
+    <div class="bar">
+      {% for stage in ladder %}
+      <a class="seg {{ 'on' if stage.name == selected_stage }}"
+         href="{{ keep(stage=stage.name) }}#progress"
+         style="width:{{ stage.share }}%;background:{{ stage.colour }}"
+         title="{{ stage.name }}: {{ stage.count }}">
+        {% if stage.share > 7 %}<b>{{ stage.count }}</b>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    <ol class="stages">
+      {% for stage in ladder %}
+      <li>
+        <a href="{{ keep(stage=stage.name) }}#progress">
+          <span class="dot" style="background:{{ stage.colour }}"></span>
+          <span class="n">{{ stage.count }}</span>
+          <span class="s">{{ stage.name }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+
+  <section class="check" id="progress">
+    <h2>Developer progress <span class="tally clear">{{ progress|length }}</span></h2>
+    <p class="meta">Every parent card in this sprint. Yesterday is {{ board.yesterday_label if board else 'the previous working day' }}. Logged means time was entered on that card that day. A finished card does not owe a log. The row opens the ticket.</p>
+    {% if selected_stage or selected_who %}
+    <p class="filter-line">
+      Showing
+      {% if selected_who %}<strong>{{ selected_who }}</strong>{% endif %}
+      {% if selected_stage %} in {{ selected_stage }}{% endif %}.
+      <a href="{{ keep(who='', stage='') }}#progress">Show everyone</a>
+    </p>
+    {% endif %}
+    {% if board and ladder %}
+    <nav class="filters" aria-label="Filter progress">
+      <a class="chip {{ 'on' if not selected_stage }}" href="{{ keep(stage='') }}#progress">All cards</a>
+      {% for stage in ladder %}
+      <a class="chip {{ 'on' if stage.name == selected_stage }}" href="{{ keep(stage=stage.name) }}#progress">{{ stage.name }}</a>
+      {% endfor %}
+    </nav>
+    {% endif %}
+
+    {% if not board %}
+      <p class="detail">No per-card progress in this snapshot yet.</p>
+    {% elif not progress %}
+      <p class="detail">Nothing in this filter.</p>
+    {% else %}
+    <div class="scroll">
+    <table class="board progress">
+      <colgroup>
+        <col class="c-who">
+        <col class="c-key">
+        <col class="c-work">
+        <col class="c-stage">
+        <col class="c-date">
+        <col class="c-log">
+        <col class="c-mark">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Developer</th>
+          <th>Ticket</th>
+          <th>Work</th>
+          <th>Stage</th>
+          <th>Target</th>
+          <th>Last log</th>
+          <th>Yesterday</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for card in progress %}
+        <tr class="link-row" tabindex="0" data-href="{{ site }}/browse/{{ card.key }}">
+          <td data-label="Developer">
+            <span class="person"><a href="{{ keep(who=card.developer, stage='') }}#progress">{{ card.developer }}</a><span class="role role-{{ card.role }}">{{ card.role }}</span></span>
+            {% if card.holder and card.holder != card.developer %}<p class="hand">now with {{ card.holder }}</p>{% endif %}
+          </td>
+          <td class="key" data-label="Ticket">
+            <a class="keylink" target="_blank" rel="noopener" href="{{ site }}/browse/{{ card.key }}">{{ card.key }}</a>
+          </td>
+          <td data-label="Work">
+            <a class="quiet" target="_blank" rel="noopener" href="{{ site }}/browse/{{ card.key }}">{{ card.summary }}</a>
+          </td>
+          <td data-label="Stage"><span class="stage">{{ card.status }}</span></td>
+          <td data-label="Target">{{ card.target_label }}</td>
+          <td data-label="Last log">
+            <p class="problem">{{ card.when }}</p>
+            {% if card.note %}<p class="note">{{ card.note }}</p>{% endif %}
+            {% if card.updated != '—' %}<p class="hand">ticket updated {{ card.updated }}</p>{% endif %}
+          </td>
+          <td data-label="Yesterday">
+            {% if card.mark == 'logged' %}<span class="pill ok">Logged</span>
+            {% elif card.mark == 'missed' %}<span class="pill bad">No log</span>
+            {% elif card.mark == 'done' %}<span class="pill wait">Done</span>
+            {% else %}<span class="pill wait" title="Not in Development, paused, or QA fail, or the card was picked up after that day">—</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+  </section>
+
+  {% if talk %}
+  <section class="check">
+    <h2>Talk to</h2>
+    <p class="meta">The person who built the card. The name filters the progress table.</p>
+    <table class="people">
+      <colgroup><col class="c-who"><col class="c-count"><col></colgroup>
+      <thead><tr><th>Person</th><th>Cards</th><th>About</th></tr></thead>
+      <tbody>
+      {% for person in talk %}
+        <tr>
+          <td><span class="person"><a href="{{ keep(who=person.developer, stage='') }}#progress">{{ person.developer }}</a><span class="role role-{{ person.role }}">{{ person.role }}</span></span></td>
+          <td class="count strong">{{ person.count }}</td>
+          <td>{{ person.problems }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% if chase %}
+  <section class="check" id="chase">
+    <h2>Chase these <span class="tally">{{ chase|length }}</span></h2>
+    <p class="meta">Each card once. The worst problem is the headline. Open the ticket from the key.</p>
+    <div class="scroll">
+    <table class="chase board">
+      <colgroup>
+        <col class="c-card">
+        <col class="c-problem">
+        <col class="c-who">
+        <col class="c-wait">
+      </colgroup>
+      <thead><tr><th>Card</th><th>What's wrong</th><th>Chase</th><th class="num">Waiting</th></tr></thead>
+      <tbody>
+      {% for card in chase %}
+        <tr class="link-row" tabindex="0" data-href="{{ site }}/browse/{{ card.key }}">
+          <td class="key" data-label="Card">
+            <a class="keylink" target="_blank" rel="noopener" href="{{ site }}/browse/{{ card.key }}">{{ card.key }}</a>
+            {% if card.summary %}<p class="note">{{ card.summary }}</p>{% endif %}
+          </td>
+          <td data-label="What's wrong">
+            <p class="problem">{{ card.title }}</p>
+            <p class="detail">{{ card.detail }}</p>
+            {% if card.also %}<p class="also">Also {{ card.also }}</p>{% endif %}
+          </td>
+          <td data-label="Chase">
+            <span class="person"><a href="{{ keep(who=card.developer, stage='') }}#progress">{{ card.developer }}</a><span class="role role-{{ card.role }}">{{ card.role }}</span></span>
+            {% if card.show_holder %}<p class="hand">now with {{ card.holder }}</p>{% endif %}
+          </td>
+          <td class="num" data-label="Waiting">{{ as_days(card.hours) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if paperwork %}
+  <details class="check">
+    <summary>{{ paperwork|length }} {{ 'card is' if paperwork|length == 1 else 'cards are' }} only missing dates or a brief <span class="meta">Not a blocker. Open if you want the list.</span></summary>
+    <div class="scroll">
+    <table class="board papers">
+      <colgroup><col class="c-card"><col class="c-problem"><col class="c-who"></colgroup>
+      <thead><tr><th>Card</th><th>What's missing</th><th>Built by</th></tr></thead>
+      <tbody>
+      {% for card in paperwork %}
+        <tr class="link-row" tabindex="0" data-href="{{ site }}/browse/{{ card.key }}">
+          <td class="key">
+            <a class="keylink" target="_blank" rel="noopener" href="{{ site }}/browse/{{ card.key }}">{{ card.key }}</a>
+            {% if card.summary %}<p class="note">{{ card.summary }}</p>{% endif %}
+          </td>
+          <td>{{ card.detail }}</td>
+          <td><span class="person">{{ card.developer }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </details>
+  {% endif %}
+
+</main>
+<script>
+document.querySelectorAll("tr[data-href]").forEach(function (row) {
+  row.addEventListener("click", function (event) {
+    if (event.target.closest("a")) return;
+    window.open(row.dataset.href, "_blank", "noopener");
+  });
+  row.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") window.open(row.dataset.href, "_blank", "noopener");
+  });
+});
+</script>
+</body>
+</html>
