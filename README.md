@@ -168,3 +168,4 @@ a day sits far inside Atlassian's rate limits.
 - I couldn't run this against your live Jira from where it was built — the four
   rules are unit-tested against synthetic issues, but the first real run is
   yours. `python -m monitor.collect` prints what it found before saving.
+# Jira-monitoring
